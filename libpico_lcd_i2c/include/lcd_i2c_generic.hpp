@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 using uint8 = uint8_t;
+using uint = unsigned int;
 
 namespace generic_impl
 {
@@ -39,7 +40,7 @@ namespace generic_impl
     constexpr uint8 LCD_FS_5x8DOTS(0x00);
     constexpr uint8 LCD_FS_5x10DOTS(0x04);
 
-    // LCD backlight control
+    // LCD backlight pin control
     constexpr uint8 LCD_BACKLIGHT(0x08);
 
     // LCD enable pin control
@@ -85,9 +86,19 @@ namespace generic_impl
         void cursor_off();
         void blink_on();
         void blink_off();
-        
-        void printc(char c);
-        void prints(const char *s);
+        void set_cursor(uint line, uint column);
+
+        void print(char c);
+        void printlc(uint line, uint column, char c);
+
+        void print(const char *s);
+        void printlc(uint line, uint column, const char *s);
+
+        void print(int value);
+        void printlc(uint line, uint column, int value);
+
+        void print(float value);
+        void printlc(uint line, uint column, float value);
 
         virtual ~lcd_i2c_generic();
     };

@@ -15,3 +15,7 @@ add_executable(lcd_test main.cpp)
 target_link_libraries(lcd_test pico_lcd_i2c)
 
 pico_add_extra_outputs(lcd_test)
+
+pico_enable_stdio_usb(${PROJECT_NAME} 1)
+
+pico_enable_stdio_uart(${PROJECT_NAME} 0)

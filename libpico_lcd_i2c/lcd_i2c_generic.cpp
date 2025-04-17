@@ -1,4 +1,8 @@
 #include <lcd_i2c_generic.hpp>
+#include <string>
+
+using std::string;
+using std::to_string;
 
 namespace generic_impl
 {
@@ -147,15 +151,60 @@ namespace generic_impl
         send_command(LCD_DISPLAYCONTROL, flag_disable(_dc_flags, LCD_DC_BLINK));
     }
 
-    void lcd_i2c_generic::printc(char c)
+    void lcd_i2c_generic::print(char c)
     {
         send_char(c);
     }
 
-    void lcd_i2c_generic::prints(const char *s)
+    void lcd_i2c_generic::print(const char *s)
     {
         while(*s) {
             send_char(*s++);
         }
+    }
+
+    void lcd_i2c_generic::set_cursor(uint line, uint column)
+    {
+        int line_offsets[] = { 0x00, 0x40, 0x14, 0x54 };
+        if ( line > _lin ) {
+            line = _lin-1;
+        }
+        send_command(LCD_SETDDRAMADDR, (column + line_offsets[line]));
+    }
+
+    void lcd_i2c_generic::printlc(uint line, uint column, char c)
+    {
+        set_cursor(line, column);
+        print(c);
+    }
+
+    void lcd_i2c_generic::printlc(uint line, uint column, const char *s)
+    {
+        set_cursor(line, column);
+        print(s);
+    }
+
+    void lcd_i2c_generic::print(int value)
+    {
+        string v = to_string(value);
+        print(v.c_str());
+    }
+
+    void lcd_i2c_generic::printlc(uint line, uint column, int value)
+    {
+        set_cursor(line, column);
+        print(value);
+    }
+
+    void lcd_i2c_generic::print(float value)
+    {
+        string v = to_string(value);
+        print(v.c_str());
+    }
+
+    void lcd_i2c_generic::printlc(uint line, uint column, float value)
+    {
+        set_cursor(line, column);
+        print(value);
     }
 }
