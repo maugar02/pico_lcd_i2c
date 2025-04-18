@@ -60,11 +60,19 @@ namespace generic_impl
         uint8 _ems_flags;
         uint8 _fs_flags;
         uint8 _backlight_bit;
+        uint8 _cursor;
+
+        bool _sclrs_flag;
+        bool _clr_next;
+
+        char *_prev_buffer;
+        char *_new_buffer;
 
         void send(uint8 value, bool mode);
         void pulse_enable(uint8 value);
         void send_command(uint8 command, uint8 command_flags);
         void send_char(char c);
+        void __printc();
 
         virtual int i2c_write_byte(uint8 value);
         virtual void wait_ms(uint32_t ms) const;
@@ -78,6 +86,9 @@ namespace generic_impl
 
         void init();
         void clear();
+        void smooth_clear_on();
+        void smooth_clear_off();
+        void update();
         void return_home();
 
         void backlight_on();
@@ -86,7 +97,7 @@ namespace generic_impl
         void cursor_off();
         void blink_on();
         void blink_off();
-        void set_cursor(uint line, uint column);
+        void set_cursor(uint line, uint column, bool mode = false);
 
         void print(char c);
         void printlc(uint line, uint column, char c);
@@ -96,6 +107,9 @@ namespace generic_impl
 
         void print(int value);
         void printlc(uint line, uint column, int value);
+
+        void print(uint value);
+        void printlc(uint line, uint column, uint value);
 
         void print(float value);
         void printlc(uint line, uint column, float value);

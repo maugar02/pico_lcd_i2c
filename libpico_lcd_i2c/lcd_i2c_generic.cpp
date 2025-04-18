@@ -1,5 +1,7 @@
 #include <lcd_i2c_generic.hpp>
+#include <cstring>
 #include <string>
+#include <stdio.h>
 
 using std::string;
 using std::to_string;
@@ -16,13 +18,89 @@ namespace generic_impl
         return static_cast<uint8>(value &= ~flag);
     }
 
+    // Convierte un entero a cadena de caracteres
+    char *int_to_chars_10(char *str, int value)
+	{
+		// Vemos primero si no es cero
+		if(value == 0) {
+			str[0] = '0';
+			str[1] = '\000';
+			return str;
+		}
+
+		char nums[] = "0123456789";
+		char temp[16] = "000000000000000";
+		
+		int i(0);
+		int c(14);
+		
+		if(value < 0) {
+			str[0] = '-';
+			i++;
+			value = -value;
+			
+		}
+		
+		while(value > 0) {
+			int r = value % 10;
+			temp[c] = nums[r];
+			value /= 10;
+			c--;	
+		}
+		
+		c++;
+		
+		while(c < 16) {
+			str[i] = temp[c];
+			c++; i++;
+		}
+		
+		return str;
+	}
+
+	// Convierte un entero sin signo a cadena de caracteres
+	char *uint_to_chars_10(char *str, unsigned int value)
+	{
+		if(value == 0) {
+			str[0] = '0';
+			str[1] = '\000';
+			return str;
+		}
+
+		char nums[] = "0123456789";
+		char temp[16] = "000000000000000";
+		
+		int i(0);
+		int c(13);
+		
+		while(value > 0) {
+			unsigned int r = value % 10;
+			temp[c] = nums[r];
+			value /= 10;
+			c--;	
+		}
+		
+		c++;
+		
+		while(c < 16) {
+			str[i] = temp[c];
+			c++; i++;
+		}
+		
+		return str;
+	}
+
     lcd_i2c_generic::lcd_i2c_generic(uint8 columns, uint8 lines):
     _col{columns},
     _lin{lines},
     _backlight_bit{0x00},
     _fs_flags{LCD_FS_DEFAULT_FLAGS},
     _dc_flags{LCD_DC_DEFAULT_FLAGS},
-    _ems_flags{LCD_EMS_DEFAULT_FLAGS}
+    _ems_flags{LCD_EMS_DEFAULT_FLAGS},
+    _sclrs_flag{false},
+    _clr_next{false},
+    _prev_buffer{nullptr},
+    _new_buffer{nullptr}
     {
         if(lines > 1) {
             _fs_flags |= LCD_FS_2LINE;
@@ -107,10 +185,74 @@ namespace generic_impl
         send_command(LCD_DISPLAYCONTROL, _dc_flags);
     }
 
+    void lcd_i2c_generic::__printc()
+    {
+    	int l(-1);
+
+    	for(uint i(0); i < _lin*_col; i++) {
+
+    		if(i % _col == 0) l++;
+
+    		if(_prev_buffer[i] != _new_buffer[i]) {
+
+    			set_cursor(l, i % _col, true);
+    			send_char(_new_buffer[i]);
+    		}
+
+    		_prev_buffer[i] = _new_buffer[i];
+    	}
+    }
+
+    void lcd_i2c_generic::update()
+    {
+    	if(_sclrs_flag) __printc();
+    }
+
     void lcd_i2c_generic::clear()
     {
+    	if(_sclrs_flag) {
+    		_clr_next = true;
+    		return;
+    	}
+
         send_command(LCD_CLEARDISPLAY, 0);
         wait_ms(2);
+    }
+
+    void lcd_i2c_generic::smooth_clear_on()
+    {
+    	int len = (_lin*_col) + 1;
+
+    	// Reservamos memoria
+    	if(_prev_buffer == nullptr) {
+
+    		_prev_buffer = new char[len];
+    	}
+
+    	if(_new_buffer == nullptr) {
+    		_new_buffer = new char[len];
+    	}
+
+    	for(int i(0); i < (len - 1); i++) {
+    		_new_buffer[i] = _prev_buffer[i] = ' ';
+    	}
+
+    	_cursor = 0;
+
+    	_sclrs_flag = true;
+    }
+
+    void lcd_i2c_generic::smooth_clear_off()
+    {
+    	if(_prev_buffer != nullptr) {
+    		delete _prev_buffer;
+    	}
+
+    	if(_new_buffer != nullptr) {
+    		delete _new_buffer;
+    	}
+
+    	_sclrs_flag = false;
     }
 
     void lcd_i2c_generic::return_home()
@@ -153,18 +295,69 @@ namespace generic_impl
 
     void lcd_i2c_generic::print(char c)
     {
+    	if(_sclrs_flag) {
+
+    		if(_clr_next) {
+
+    			for(int i(0); i < (_lin * _col); i++){
+    				if(_cursor == i) {
+    					_new_buffer[i] = c;
+    					continue;
+    				}
+
+    				_new_buffer[i] = ' ';
+    			}
+    			_clr_next = false;
+    		}
+    		_cursor++;
+    		return;
+    	}
+
         send_char(c);
     }
 
     void lcd_i2c_generic::print(const char *s)
     {
+    	auto len = std::strlen(s);
+    	auto last = len + _cursor;
+    	int u=0;
+    	if(_sclrs_flag) {
+    		if(_clr_next) {
+
+    			for(int i(0); i < (_lin * _col); i++){
+
+    				if(i >= _cursor &&  i < last) {
+    					_new_buffer[i] = s[u++];
+    					continue;
+    				}
+
+    				_new_buffer[i] = ' ';
+    			}
+    			_clr_next = false;
+    		}
+    		else
+    		{
+    			for(int i(_cursor); i < (_lin * _col) && i < last; i++){
+
+    				_new_buffer[i] = s[u++];
+    			}
+    		}
+
+    		return;
+    	}
+
         while(*s) {
             send_char(*s++);
         }
     }
 
-    void lcd_i2c_generic::set_cursor(uint line, uint column)
+    void lcd_i2c_generic::set_cursor(uint line, uint column, bool no_mode)
     {
+    	if(_sclrs_flag && no_mode == false) {
+    		_cursor = line*_col + column;
+    		return;
+    	}
+
         int line_offsets[] = { 0x00, 0x40, 0x14, 0x54 };
         if ( line > _lin ) {
             line = _lin-1;
@@ -186,11 +379,25 @@ namespace generic_impl
 
     void lcd_i2c_generic::print(int value)
     {
-        string v = to_string(value);
-        print(v.c_str());
+        char cad[12];
+        int_to_chars_10(cad, value);
+        print(cad);
     }
 
     void lcd_i2c_generic::printlc(uint line, uint column, int value)
+    {
+        set_cursor(line, column);
+        print(value);
+    }
+
+    void lcd_i2c_generic::print(uint value)
+    {
+        char cad[12];
+        uint_to_chars_10(cad, value);
+        print(cad);
+    }
+
+    void lcd_i2c_generic::printlc(uint line, uint column, uint value)
     {
         set_cursor(line, column);
         print(value);
@@ -201,6 +408,7 @@ namespace generic_impl
         string v = to_string(value);
         print(v.c_str());
     }
+
 
     void lcd_i2c_generic::printlc(uint line, uint column, float value)
     {
