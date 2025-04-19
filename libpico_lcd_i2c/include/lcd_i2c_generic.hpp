@@ -62,6 +62,7 @@ namespace generic_impl
         uint8 _backlight_bit;
         uint8 _cursor;
 
+        uint _float_pre;
         bool _sclrs_flag;
         bool _clr_next;
 
@@ -99,6 +100,8 @@ namespace generic_impl
         void blink_off();
         void set_cursor(uint line, uint column, bool mode = false);
 
+        void set_float_precision(uint p);
+        
         void print(char c);
         void printlc(uint line, uint column, char c);
 

@@ -1,10 +1,5 @@
 #include <lcd_i2c_generic.hpp>
 #include <cstring>
-#include <string>
-#include <stdio.h>
-
-using std::string;
-using std::to_string;
 
 namespace generic_impl
 {
@@ -19,9 +14,55 @@ namespace generic_impl
     }
 
     // Convierte un entero a cadena de caracteres
-    char *int_to_chars_10(char *str, int value)
+    char *int_to_chars_10(char *str, int value, int &index)
 	{
 		// Vemos primero si no es cero
+        // En caso de que sea cero, escribimos cero y retornamos
+		if(value == 0) {
+			str[index++] = '0';
+			str[index++] = '\000';
+			return str;
+		}
+
+		char nums[] = "0123456789";
+		char temp[16] = "000000000000000";
+		
+		int i = index;
+		int c(14);
+
+		// Si es negativo agregamos el signo
+		if(value < 0) {
+			str[0] = '-';
+			i++;
+			value = -value;
+			
+		}
+		
+        // Agregamos los digitos a temp de forma descendente
+        // Luego los agregamos a la cadena de salida
+		while(value > 0) {
+			int r = value % 10;
+			temp[c] = nums[r];
+			value /= 10;
+			c--;	
+		}
+		// Incrementamos para volver al ultimo digito ingresado
+		c++;
+		// Copiamos lo que estaba en temp a la cadena de salida
+		while(c < 16) {
+			str[i] = temp[c];
+			c++; i++;
+		}
+		index = i;
+		return str;
+	}
+
+	// Convierte un entero sin signo a cadena de caracteres
+	char *uint_to_chars_10(char *str, unsigned int value)
+	{
+        // Se hace lo mismo que en la funcion anterio
+        // preo sin evaluar el signo.
+
 		if(value == 0) {
 			str[0] = '0';
 			str[1] = '\000';
@@ -33,45 +74,6 @@ namespace generic_impl
 		
 		int i(0);
 		int c(14);
-		
-		if(value < 0) {
-			str[0] = '-';
-			i++;
-			value = -value;
-			
-		}
-		
-		while(value > 0) {
-			int r = value % 10;
-			temp[c] = nums[r];
-			value /= 10;
-			c--;	
-		}
-		
-		c++;
-		
-		while(c < 16) {
-			str[i] = temp[c];
-			c++; i++;
-		}
-		
-		return str;
-	}
-
-	// Convierte un entero sin signo a cadena de caracteres
-	char *uint_to_chars_10(char *str, unsigned int value)
-	{
-		if(value == 0) {
-			str[0] = '0';
-			str[1] = '\000';
-			return str;
-		}
-
-		char nums[] = "0123456789";
-		char temp[16] = "000000000000000";
-		
-		int i(0);
-		int c(13);
 		
 		while(value > 0) {
 			unsigned int r = value % 10;
@@ -90,6 +92,62 @@ namespace generic_impl
 		return str;
 	}
 
+    // Convierte un numero en coma flotante a cadena de caracteres.
+	char *float_to_chars_10(char *str, float value, uint pre=3U)
+	{
+		int real(0);          // Guarda la parte real
+		float decimal(0.0f);  // Guarda la parte decimal
+		int i(0);             // Indice para escribir en la cadena de salida
+		int pre_mult(1);      // Multiplicador de la parte decimal
+
+		real = static_cast<int>(value);   // Convertimos a entero.
+		decimal = (value - real);         // Obtenemos la parte decimal
+
+        // La precisión está limitada a valores entre 0 y 3
+		if(pre > 3U)
+			pre = 3U;
+        if(pre == 0)
+            pre = 1U;
+
+        // Calculamos el multiplicador de presicion multiplicando tantas veces por
+        // 10 como lo requiera el presición.
+		for(int j(0); j < pre; j++) {
+			pre_mult *= 10;
+		}
+
+        // Multiplicamos la parte decimal por el multiplicador y agregamos 0.5 
+        // para mejorar la presición.
+		decimal *= pre_mult;
+        decimal += 0.5f;
+
+        /* Si por alguna razon el valor decimal es igual o mayor que el multiplicador
+        colocamos el valor decimal a cero e incrementamos el valor real. */
+        if(static_cast<int>(decimal) >= pre_mult) {
+            decimal = 0.0f;
+            real++;
+        }
+
+        // Convertimos la parte real y la agregamos a la cadena de salida
+        int_to_chars_10(str, real, i);
+        // Eliminamos el caracter del fin de linea que le agrega la función anterior
+        str[--i] = '.'; i++;
+        // Si el decimal es cero agregamos los ceros de la presicion
+        if(static_cast<int>(decimal) == 0) {
+
+            for(int j(0); j < pre; j++) {
+                str[i++] = '0';
+            }
+
+            str[i] = '\000';
+        }
+
+        // Si no continuamos y convertimos la parte decimal y la agregamos la cadena
+		else int_to_chars_10(str, static_cast<int>(decimal), i);
+		
+        // Retornamos, la funcion anterior ya agrega el caracter de fin de linea
+		return str;
+	}
+    
     lcd_i2c_generic::lcd_i2c_generic(uint8 columns, uint8 lines):
     _col{columns},
     _lin{lines},
@@ -365,6 +423,11 @@ namespace generic_impl
         send_command(LCD_SETDDRAMADDR, (column + line_offsets[line]));
     }
 
+    void lcd_i2c_generic::set_float_precision(uint p)
+    {
+    	_float_pre = p;
+    }
+
     void lcd_i2c_generic::printlc(uint line, uint column, char c)
     {
         set_cursor(line, column);
@@ -380,7 +443,8 @@ namespace generic_impl
     void lcd_i2c_generic::print(int value)
     {
         char cad[12];
-        int_to_chars_10(cad, value);
+        int i(0);
+        int_to_chars_10(cad, value, i);
         print(cad);
     }
 
@@ -405,8 +469,9 @@ namespace generic_impl
 
     void lcd_i2c_generic::print(float value)
     {
-        string v = to_string(value);
-        print(v.c_str());
+       	char cad[15];
+       	float_to_chars_10(cad, value, _float_pre);
+        print(cad);
     }
 
 

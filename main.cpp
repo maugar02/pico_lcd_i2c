@@ -10,20 +10,19 @@ int main()
     lcd1.init();
     lcd1.backlight_on();
     lcd1.smooth_clear_on();
+    lcd1.set_float_precision(2);
 
-    int cl(0);
+    float cl(0.0f);
 
     while(true) {
     	
-        lcd1.printlc(0, 0, "Cadena: ");
+        lcd1.printlc(0, 0, "float: ");
         lcd1.printlc(0, 8, cl);
-        lcd1.printlc(1, 0, "Cadena2: ");
-        lcd1.printlc(1, 8, cl-100);
         lcd1.update();
         sleep_ms(500);
-        cl++;
+        cl += 0.1;
         lcd1.clear();
     }
-    
+        
     return 0;
 }
